@@ -1,19 +1,3 @@
-/*
- * Copyright 2018, 2020 Jonathan Anderson
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 #include <errno.h>
 #include <stdio.h>
 
@@ -22,7 +6,8 @@
 #define	ROOT_DIR	1
 #define	ASSIGN_DIR	2
 #define	USERNAME_FILE	3
-#define	FILE_COUNT	3
+#define FEATURE_FILE 4
+#define	FILE_COUNT	4
 
 // Hard-coded stat(2) information for each directory and file:
 struct stat *file_stats;
@@ -30,6 +15,7 @@ struct stat *file_stats;
 
 // Hard-coded content of the "assignment/username" file:
 static const char UsernameContent[] = "lx2786\n";
+static const char FeatureContent[] = "Here we are\n";
 
 static void
 assign4_init(void *userdata, struct fuse_conn_info *conn)
@@ -54,6 +40,11 @@ assign4_init(void *userdata, struct fuse_conn_info *conn)
 	file_stats[USERNAME_FILE].st_mode = S_IFREG | AllRead;
 	file_stats[USERNAME_FILE].st_size = sizeof(UsernameContent);
 	file_stats[USERNAME_FILE].st_nlink = 1;
+
+	file_stats[FEATURE_FILE].st_ino = FEATURE_FILE;
+	file_stats[FEATURE_FILE].st_mode = S_IFREG | AllRead;
+	file_stats[FEATURE_FILE].st_size = sizeof(FeatureContent);
+	file_stats[FEATURE_FILE].st_nlink = 1;
 }
 
 static void
@@ -94,7 +85,6 @@ assign4_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 static void
 assign4_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fip)
 {
-	fprintf(stderr, "*** %s ino=%zu\n", __func__, ino);
 
 	if (ino > FILE_COUNT) {
 		fuse_reply_err(req, ENOENT);
@@ -111,8 +101,6 @@ assign4_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fip)
 static void
 assign4_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	fprintf(stderr, "*** %s parent=%zu name='%s'\n", __func__,
-	        parent, name);
 
 	struct fuse_entry_param dirent;
 
@@ -127,6 +115,12 @@ assign4_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		// Looking for 'username' in the 'assignment' directory
 		dirent.ino = USERNAME_FILE;
 		dirent.attr = file_stats[USERNAME_FILE];
+	}
+	else if (parent == ASSIGN_DIR && strcmp(name, "feature") == 0)
+	{
+		// Looking for 'username' in the 'assignment' directory
+		dirent.ino = FEATURE_FILE;
+		dirent.attr = file_stats[FEATURE_FILE];
 	}
 	else
 	{
@@ -181,9 +175,6 @@ static void
 assign4_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	     off_t off, struct fuse_file_info *fi)
 {
-	fprintf(stderr, "*** %s ino=%zu size=%zu off=%zu\n", __func__,
-	        ino, size, off);
-
 	// In our trivial example, all directories happen to have three
 	// entries: ".", ".." and either "assignment" or "username".
 	if (off > 2) {
@@ -234,6 +225,11 @@ assign4_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		                           "username",
 		                           file_stats + USERNAME_FILE,
 		                           ++next);
+		bytes += fuse_add_direntry(req, buffer + bytes,
+		                           sizeof(buffer) - bytes,
+		                           "feature",
+		                           file_stats + FEATURE_FILE,
+		                           ++next);
 		break;
 	}
 
@@ -248,9 +244,6 @@ static void
 assign4_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	  off_t off, struct fuse_file_info *fi)
 {
-	fprintf(stderr, "*** %s ino=%zu size=%zu off=%zu\n", __func__,
-	        ino, size, off);
-
 	const char *response_data = NULL;
 	size_t response_len;
 	int err = 0;
@@ -270,6 +263,19 @@ assign4_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 		response_data = UsernameContent + off;
 		response_len = sizeof(UsernameContent) - off;
+		if (response_len > size) {
+			response_len = size;
+		}
+		break;
+	
+	case FEATURE_FILE:
+		if (off >= sizeof(FeatureContent)) {
+			response_len = 0;
+			break;
+		}
+
+		response_data = FeatureContent + off;
+		response_len = sizeof(FeatureContent) - off;
 		if (response_len > size) {
 			response_len = size;
 		}
