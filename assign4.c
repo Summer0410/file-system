@@ -25,10 +25,12 @@ struct stat *file_stats;
 struct file_node *helper_array;//Array of file node
 int current_file_count = 4;
 
-
+static const int AllRead = S_IRUSR | S_IRGRP | S_IROTH;
+static const int AllExec = S_IXUSR | S_IXGRP | S_IXOTH;
+static const int AllPermission = S_IRWXU | S_IRWXG | S_IRWXO;
 // Hard-coded content of the "assignment/username" file:
 static const char UsernameContent[] = "lx2786\n";
-static const char FeatureContent[] = "Implemented following optional features:\n
+static const char FeatureContent[] = "Implemented following optional features:\
 									  --ls\n";
 
 static void
@@ -40,11 +42,8 @@ assign4_init(void *userdata, struct fuse_conn_info *conn)
 	file_stats = calloc(FILE_COUNT + 1, sizeof(*file_stats));
 	helper_array = calloc(FILE_COUNT + 1, sizeof(struct file_node));
 
-	static const int AllRead = S_IRUSR | S_IRGRP | S_IROTH;
-	static const int AllExec = S_IXUSR | S_IXGRP | S_IXOTH;
-
 	file_stats[ROOT_DIR].st_ino = ROOT_DIR;
-	file_stats[ROOT_DIR].st_mode = S_IFDIR | AllRead | AllExec;
+	file_stats[ROOT_DIR].st_mode = S_IFDIR | AllPermission | AllPermission;
 	file_stats[ROOT_DIR].st_nlink = 1;
 	helper_array[ROOT_DIR].is_dir = 1;//is a dir
 	helper_array[ROOT_DIR].parent_inode = -1;//no parent 
@@ -172,8 +171,39 @@ assign4_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 static void
 assign4_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
-	fprintf(stderr, "%s parent=%zu name='%s' mode=%d\n", __func__,
-	        parent, name, mode);
+	// fprintf(stderr, "%s parent=%zu name='%s' mode=%d\n", __func__,
+	//         parent, name, mode);
+	// fuse_reply_err(req, ENOSYS);
+	struct fuse_entry_param dirent;//ino+attr
+	current_file_count++;
+	file_stats[current_file_count].st_ino = current_file_count;
+	file_stats[current_file_count].st_mode = mode;
+	file_stats[current_file_count].st_nlink = 1;
+	helper_array[current_file_count].is_dir = 1;//is a dir
+	helper_array[current_file_count].parent_inode = parent;//no parent 
+	helper_array[current_file_count].child_count = 0;
+	strcpy(helper_array[current_file_count].name, name);
+	// I'm not re-using inodes, so I don't need to worry about real
+	// generation numbers... always use the same one.
+	dirent.generation = 1;
+
+	// Assume that these values are always valid for 1s:
+	dirent.attr_timeout = 1;
+	dirent.entry_timeout = 1;
+	dirent.ino = current_file_count;
+	dirent.attr = file_stats[current_file_count];
+	int result = fuse_reply_entry(req,&dirent);
+	if (result!=0){
+		fuse_reply_err(req, ENOSYS);
+	}
+
+}
+
+/* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L367 */
+static void
+assign4_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
+{
+	fprintf(stderr, "%s parent=%zu name='%s'\n", __func__, parent, name);
 	fuse_reply_err(req, ENOSYS);
 }
 
@@ -307,13 +337,7 @@ assign4_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	}
 }
 
-/* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L367 */
-// static void
-// assign4_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
-// {
-// 	fprintf(stderr, "%s parent=%zu name='%s'\n", __func__, parent, name);
-// 	fuse_reply_err(req, ENOSYS);
-// }
+
 
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L286 */
 // static void
