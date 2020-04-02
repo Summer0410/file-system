@@ -11,7 +11,7 @@
 
 //sudo diskutil unmount force tmp
 
-//
+//Here
 typedef struct file_node{
 	bool is_dir;
 	char name[50];
@@ -171,9 +171,6 @@ assign4_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 static void
 assign4_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
-	// fprintf(stderr, "%s parent=%zu name='%s' mode=%d\n", __func__,
-	//         parent, name, mode);
-	// fuse_reply_err(req, ENOSYS);
 	struct fuse_entry_param dirent;//ino+attr
 	current_file_count++;
 	file_stats[current_file_count].st_ino = current_file_count;
@@ -186,7 +183,6 @@ assign4_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	// I'm not re-using inodes, so I don't need to worry about real
 	// generation numbers... always use the same one.
 	dirent.generation = 1;
-
 	// Assume that these values are always valid for 1s:
 	dirent.attr_timeout = 1;
 	dirent.entry_timeout = 1;
@@ -194,7 +190,7 @@ assign4_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	dirent.attr = file_stats[current_file_count];
 	int result = fuse_reply_entry(req,&dirent);
 	if (result!=0){
-		fuse_reply_err(req, ENOSYS);
+		fprintf(stderr, "Failed to send dirent reply\n");
 	}
 
 }
@@ -203,8 +199,18 @@ assign4_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 static void
 assign4_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	fprintf(stderr, "%s parent=%zu name='%s'\n", __func__, parent, name);
-	fuse_reply_err(req, ENOSYS);
+	for(int i = 1; i<current_file_count+1;i++){
+		printf("The value of i %d:\n", i);
+		if(helper_array[i].parent_inode == parent && strcmp(name, helper_array[i].name) == 0){
+			printf("I found the dir i want to delete");
+			file_stats[i].st_ino = NULL;
+			strcpy(helper_array[i].name,"");
+			helper_array[i].parent_inode = -1;
+			fuse_reply_err(req, 0);
+		}
+	}
+	//fuse_reply_err(req, ENOENT);
+
 }
 
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L317 */
