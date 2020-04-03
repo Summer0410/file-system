@@ -149,29 +149,33 @@ assign4_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L332 */
 static void
 assign4_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
-{
-	struct fuse_entry_param dirent;//ino+attr
-	current_file_count++;
-	file_stats[current_file_count].st_ino = current_file_count;
-	file_stats[current_file_count].st_mode = S_IFDIR | AllPermission | AllPermission;;
-	file_stats[current_file_count].st_nlink = 1;
-	helper_array[current_file_count].is_dir = 1;//is a dir
-	helper_array[current_file_count].parent_inode = parent;//no parent 
-	helper_array[current_file_count].child_count = 0;
-	strcpy(helper_array[current_file_count].name, name);
-	// I'm not re-using inodes, so I don't need to worry about real
-	// generation numbers... always use the same one.
-	dirent.generation = 1;
-	// Assume that these values are always valid for 1s:
-	dirent.attr_timeout = 1;
-	dirent.entry_timeout = 1;
-	dirent.ino = current_file_count;
-	dirent.attr = file_stats[current_file_count];
-	int result = fuse_reply_entry(req,&dirent);
-	if (result!=0){
-		fprintf(stderr, "Failed to send dirent reply\n");
+{	
+	if(parent != 2){
+		struct fuse_entry_param dirent;//ino+attr
+		current_file_count++;
+		file_stats[current_file_count].st_ino = current_file_count;
+		file_stats[current_file_count].st_mode = S_IFDIR | AllPermission | AllPermission;
+		file_stats[current_file_count].st_nlink = 1;
+		helper_array[current_file_count].is_dir = 1;//is a dir
+		helper_array[current_file_count].parent_inode = parent;//no parent 
+		helper_array[current_file_count].child_count = 0;
+		strcpy(helper_array[current_file_count].name, name);
+		// I'm not re-using inodes, so I don't need to worry about real
+		// generation numbers... always use the same one.
+		dirent.generation = 1;
+		// Assume that these values are always valid for 1s:
+		dirent.attr_timeout = 1;
+		dirent.entry_timeout = 1;
+		dirent.ino = current_file_count;
+		dirent.attr = file_stats[current_file_count];
+		int result = fuse_reply_entry(req,&dirent);
+		if (result!=0){
+			fprintf(stderr, "Failed to send dirent reply\n");
+		}
 	}
-
+	else{
+		fuse_reply_err(req,EPERM);
+	}
 }
 
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L367 */
