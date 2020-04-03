@@ -7,7 +7,7 @@
 #define	ASSIGN_DIR	2
 #define	USERNAME_FILE	3
 #define FEATURE_FILE 4
-#define	FILE_COUNT	1000//Maximum number of files
+#define	FILE_COUNT	10000//Maximum number of files
 
 //sudo diskutil unmount force tmp
 
@@ -34,7 +34,7 @@ static const char FeatureContent[] = "Implemented following optional features:\n
 									  "-mkdir and rmdir\n"
 									  "-ls\n"
 									  "-create file and unlink file\n"
-									  "-Permission manipulation\n";
+									  "-Permission manipulation(Note: to test this feature, you may need to use 'sudo')\n";
 
 static void
 assign4_init(void *userdata, struct fuse_conn_info *conn)
