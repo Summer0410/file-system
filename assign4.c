@@ -30,8 +30,11 @@ static const int AllExec = S_IXUSR | S_IXGRP | S_IXOTH;
 static const int AllPermission = S_IRWXU | S_IRWXG | S_IRWXO;
 // Hard-coded content of the "assignment/username" file:
 static const char UsernameContent[] = "lx2786\n";
-static const char FeatureContent[] = "Implemented following optional features:\
-									  --ls\n";
+static const char FeatureContent[] = "Implemented following optional features:\n"
+									  "-mkdir and rmdir\n"
+									  "-ls\n"
+									  "-create file and unlink file\n"
+									  "-Permission manipulation\n";
 
 static void
 assign4_init(void *userdata, struct fuse_conn_info *conn)
@@ -83,36 +86,12 @@ assign4_destroy(void *userdata)
 	file_stats = NULL;
 }
 
-
-/* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L801 */
-static void
-assign4_create(fuse_req_t req, fuse_ino_t parent, const char *name,
-            mode_t mode, struct fuse_file_info *fi)
-{
-	fprintf(stderr, "%s parent=%zu name='%s' mode=%d\n", __func__,
-	        parent, name, mode);
-
-	/*
-	 * Create and open a file.
-	 *
-	 * Respond by calling fuse_reply_err() if there's an error, or else
-	 * fuse_reply_create(), passing it information in a fuse_entry_param:
-	 *
-	 * https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L68
-	 *
-	 * This is the meaning of the "Valid replies" comment at
-	 * https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L791
-	 */
-
-	fuse_reply_err(req, ENOSYS);
-}
-
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L256 */
 static void
 assign4_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fip)
 {
 
-	if (ino > FILE_COUNT) {
+	if (ino > current_file_count) {
 		fuse_reply_err(req, ENOENT);
 		return;
 	}
@@ -174,7 +153,7 @@ assign4_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	struct fuse_entry_param dirent;//ino+attr
 	current_file_count++;
 	file_stats[current_file_count].st_ino = current_file_count;
-	file_stats[current_file_count].st_mode = mode;
+	file_stats[current_file_count].st_mode = S_IFDIR | AllPermission | AllPermission;;
 	file_stats[current_file_count].st_nlink = 1;
 	helper_array[current_file_count].is_dir = 1;//is a dir
 	helper_array[current_file_count].parent_inode = parent;//no parent 
@@ -209,19 +188,36 @@ assign4_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 			fuse_reply_err(req, 0);
 		}
 	}
-	//fuse_reply_err(req, ENOENT);
 
 }
 
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L317 */
-// static void
-// assign4_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
-//            mode_t mode, dev_t rdev)
-// {
-// 	fprintf(stderr, "%s parent=%zu name='%s' mode=%d\n", __func__,
-// 	        parent, name, mode);
-// 	fuse_reply_err(req, ENOSYS);
-// }
+static void
+assign4_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
+           mode_t mode, dev_t rdev)
+{
+	struct fuse_entry_param dirent;//ino+attr
+	current_file_count++;
+	file_stats[current_file_count].st_ino = current_file_count;
+	file_stats[current_file_count].st_mode = mode;
+	file_stats[current_file_count].st_nlink = 1;
+	helper_array[current_file_count].is_dir = 1;//is a dir
+	helper_array[current_file_count].parent_inode = parent;//no parent 
+	helper_array[current_file_count].child_count = 0;
+	strcpy(helper_array[current_file_count].name, name);
+	// I'm not re-using inodes, so I don't need to worry about real
+	// generation numbers... always use the same one.
+	dirent.generation = 1;
+	// Assume that these values are always valid for 1s:
+	dirent.attr_timeout = 1;
+	dirent.entry_timeout = 1;
+	dirent.ino = current_file_count;
+	dirent.attr = file_stats[current_file_count];
+	int result = fuse_reply_entry(req,&dirent);
+	if (result!=0){
+		fprintf(stderr, "Failed to send dirent reply\n");
+	}
+}
 
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L444 */
 // static void
@@ -346,47 +342,66 @@ assign4_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L286 */
-// static void
-// assign4_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
-// 	     int to_set, struct fuse_file_info *fi)
-// {
-// 	fprintf(stderr, "%s ino=%zu to_set=%d\n", __func__, ino, to_set);
-// 	fuse_reply_err(req, ENOSYS);
-// }
+static void
+assign4_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
+	     int to_set, struct fuse_file_info *fi)
+{	
+	if (ino > current_file_count) {
+		fuse_reply_err(req, ENOENT);
+		return;
+	}
+
+	fprintf(stderr, "%s ino=%zu to_set=%d\n", __func__, ino, to_set);
+	file_stats[ino].st_mode = attr->st_mode;
+    int result = fuse_reply_attr(req, file_stats + ino, 1);
+    if (result != 0) {
+        fprintf(stderr, "Failed to send attr reply\n");
+    }
+}
 
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L674 */
 // static void
 // assign4_statfs(fuse_req_t req, fuse_ino_t ino)
 // {
 // 	fprintf(stderr, "%s ino=%zu\n", __func__, ino);
-// 	fuse_reply_err(req, ENOSYS);
+// 	statvfs *stbuf  = 
+// 	fuse_reply_statfs(req,);
 // }
 
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L350 */
-// static void
-// assign4_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
-// {
-// 	fprintf(stderr, "%s parent=%zu name='%s'\n", __func__, parent, name);
-// 	fuse_reply_err(req, ENOSYS);
-// }
+static void
+assign4_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
+{
+	fprintf(stderr, "%s parent=%zu name='%s'\n", __func__, parent, name);
+	for(int i = 1; i<current_file_count+1;i++){
+		printf("The value of i %d:\n", i);
+		if(helper_array[i].parent_inode == parent && strcmp(name, helper_array[i].name) == 0){
+			printf("I found the dir i want to delete");
+			file_stats[i].st_ino = NULL;
+			strcpy(helper_array[i].name,"");
+			helper_array[i].parent_inode = -1;
+			fuse_reply_err(req, 0);
+		}
+	}
+}
 
 
 
 static struct fuse_lowlevel_ops assign4_ops = {
 	.init           = assign4_init,
 	.destroy        = assign4_destroy,
-	.create         = assign4_create,
+	//.create         = assign4_create,
 	.getattr        = assign4_getattr,
 	.lookup         = assign4_lookup,
 	.mkdir          = assign4_mkdir,
 	.rmdir          = assign4_rmdir,
 	.read           = assign4_read,
 	.readdir        = assign4_readdir,
-	// .mknod          = assign4_mknod,
+	.mknod          = assign4_mknod,
 	// .open           = assign4_open,
-	// .setattr        = assign4_setattr,
+	.setattr        = assign4_setattr,
 	// .statfs         = assign4_statfs,
-	// .unlink         = assign4_unlink,
+	.unlink         = assign4_unlink,
 };
 
 
