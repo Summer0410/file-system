@@ -15,8 +15,8 @@
 typedef struct file_node{
 	bool is_dir;
 	char name[50];
-	int child_count;
-	fuse_ino_t child_inode[50];//Maximum number of children - 50
+	// int child_count;
+	// fuse_ino_t child_inode[50];//Maximum number of children - 50
 	fuse_ino_t parent_inode;
 }file_node;
 
@@ -50,8 +50,6 @@ assign4_init(void *userdata, struct fuse_conn_info *conn)
 	file_stats[ROOT_DIR].st_nlink = 1;
 	helper_array[ROOT_DIR].is_dir = 1;//is a dir
 	helper_array[ROOT_DIR].parent_inode = -1;//no parent 
-	helper_array[ROOT_DIR].child_count = 1;
-	helper_array[ROOT_DIR].child_inode[0] = 2;
 	strcpy(helper_array[ROOT_DIR].name, "root");
 
 	file_stats[ASSIGN_DIR].st_ino = ASSIGN_DIR;
@@ -158,7 +156,8 @@ assign4_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 		file_stats[current_file_count].st_nlink = 1;
 		helper_array[current_file_count].is_dir = 1;//is a dir
 		helper_array[current_file_count].parent_inode = parent;//no parent 
-		helper_array[current_file_count].child_count = 0;
+		// 
+	
 		strcpy(helper_array[current_file_count].name, name);
 		// I'm not re-using inodes, so I don't need to worry about real
 		// generation numbers... always use the same one.
@@ -199,37 +198,34 @@ assign4_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 static void
 assign4_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
            mode_t mode, dev_t rdev)
-{
-	struct fuse_entry_param dirent;//ino+attr
-	current_file_count++;
-	file_stats[current_file_count].st_ino = current_file_count;
-	file_stats[current_file_count].st_mode = mode;
-	file_stats[current_file_count].st_nlink = 1;
-	helper_array[current_file_count].is_dir = 1;//is a dir
-	helper_array[current_file_count].parent_inode = parent;//no parent 
-	helper_array[current_file_count].child_count = 0;
-	strcpy(helper_array[current_file_count].name, name);
-	// I'm not re-using inodes, so I don't need to worry about real
-	// generation numbers... always use the same one.
-	dirent.generation = 1;
-	// Assume that these values are always valid for 1s:
-	dirent.attr_timeout = 1;
-	dirent.entry_timeout = 1;
-	dirent.ino = current_file_count;
-	dirent.attr = file_stats[current_file_count];
-	int result = fuse_reply_entry(req,&dirent);
-	if (result!=0){
-		fprintf(stderr, "Failed to send dirent reply\n");
+{	if(parent != 2){
+		struct fuse_entry_param dirent;//ino+attr
+		current_file_count++;
+		file_stats[current_file_count].st_ino = current_file_count;
+		file_stats[current_file_count].st_mode = mode;
+		file_stats[current_file_count].st_nlink = 1;
+		helper_array[current_file_count].is_dir = 1;//is a dir
+		helper_array[current_file_count].parent_inode = parent;//no parent 
+		// helper_array[current_file_count].child_count = 0;
+		strcpy(helper_array[current_file_count].name, name);
+		// I'm not re-using inodes, so I don't need to worry about real
+		// generation numbers... always use the same one.
+		dirent.generation = 1;
+		// Assume that these values are always valid for 1s:
+		dirent.attr_timeout = 1;
+		dirent.entry_timeout = 1;
+		dirent.ino = current_file_count;
+		dirent.attr = file_stats[current_file_count];
+		int result = fuse_reply_entry(req,&dirent);
+		if (result!=0){
+			fprintf(stderr, "Failed to send dirent reply\n");
+		}
+	}
+	else{
+		fuse_reply_err(req,EPERM);
 	}
 }
 
-/* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L444 */
-// static void
-// assign4_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
-// {
-// 	fprintf(stderr, "%s ino=%zu\n", __func__, ino);
-// 	fuse_reply_err(req, ENOSYS);
-// }
 
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L622 */
 static void
@@ -363,14 +359,6 @@ assign4_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     }
 }
 
-/* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L674 */
-// static void
-// assign4_statfs(fuse_req_t req, fuse_ino_t ino)
-// {
-// 	fprintf(stderr, "%s ino=%zu\n", __func__, ino);
-// 	statvfs *stbuf  = 
-// 	fuse_reply_statfs(req,);
-// }
 
 /* https://github.com/libfuse/libfuse/blob/fuse_2_9_bugfix/include/fuse_lowlevel.h#L350 */
 static void
@@ -394,7 +382,6 @@ assign4_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 static struct fuse_lowlevel_ops assign4_ops = {
 	.init           = assign4_init,
 	.destroy        = assign4_destroy,
-	//.create         = assign4_create,
 	.getattr        = assign4_getattr,
 	.lookup         = assign4_lookup,
 	.mkdir          = assign4_mkdir,
@@ -402,9 +389,7 @@ static struct fuse_lowlevel_ops assign4_ops = {
 	.read           = assign4_read,
 	.readdir        = assign4_readdir,
 	.mknod          = assign4_mknod,
-	// .open           = assign4_open,
 	.setattr        = assign4_setattr,
-	// .statfs         = assign4_statfs,
 	.unlink         = assign4_unlink,
 };
 
